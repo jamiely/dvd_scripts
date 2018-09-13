@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+
+# If this flag is set, the last video on the list will be removed until
+# the videos fit in the preferred duration
+REMOVE_VIDEOS_UNTIL_FITS=${REMOVE_VIDEOS_UNTIL_FITS:-"y"}
+# The maximum duration for dvds. Note that actual duration varies due to
+# encoding differences. This should be set to some intelligent upper-bound.
+# If you repeatedly encounter ISOs that are too large, you should dial this
+# default setting down.
+MAXIMUM_DURATION_IN_MINUTES=${MAXIMUM_DURATION_IN_MINUTES:-130}
+
+set -e
+
+debug() {
+  local msg="$1"
+  >&2 echo "$msg"
+}
+
+get_media_seconds() {
+  local media_path="$1"
+  local seconds=$(ffprobe -v error -show_entries format=duration \
+    -of default=noprint_wrappers=1:nokey=1 "$media_path")
+  # debug "Media $1 seconds=$seconds"
+  echo $seconds
+}
+
+get_all_media_minutes() {
+  local sum=0
+  for media_path in "$@"; do
+    local seconds=$(get_media_seconds "$media_path")
+    sum=$(echo "$sum + $seconds" | bc)
+  done
+  local minutes=$(echo "$sum / 60" | bc)
+  local floor=$( printf "%.0f" $minutes )
+  local ceiling=$(( $floor + 1 ))
+  echo $ceiling
+}
+
+validate_minutes() {
+  local minutes=$1
+
+  if [[ $minutes -gt $MAXIMUM_DURATION_IN_MINUTES ]]; then
+    debug "Duration of $minutes may not exceed $MAXIMUM_DURATION_IN_MINUTES minutes"
+    return 1
+  fi
+}
+
+run() {
+  local iso_path=$1
+  shift
+
+  local minutes=$(get_all_media_minutes $@)
+  
+  if ! validate_minutes $minutes; then
+    if [[ "$REMOVE_VIDEOS_UNTIL_FITS" == "y" ]]; then
+      debug "@@ We'll remove the last video"
+      run "$iso_path" ${@:1:$(($#-1))}
+      return $?
+    else
+      return 1
+    fi
+  fi
+
+  echo "Creating iso $iso_path from $minutes minutes of video: $@"
+
+  # create xml file
+  local control_xml_path=$(make_dvd_xml.rb $@)
+  local dvd_dir=$(mktemp -d -t dvd)
+
+  echo "Running dvdauthor with dvd_dir=$dvd_dir and control_xml_path=$control_xml_path"
+  dvdauthor -o "$dvd_dir" -x "$control_xml_path"
+
+  mkisofs -dvd-video -o "$iso_path" "$dvd_dir"
+
+  rm -rf "$dvd_dir" "$control_xml_path"
+}
+
+run $@
