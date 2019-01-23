@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+export VIDEO_FORMAT=${VIDEO_FORMAT:-NTSC}
+
 # If this flag is set, the last video on the list will be removed until
 # the videos fit in the preferred duration
 REMOVE_VIDEOS_UNTIL_FITS=${REMOVE_VIDEOS_UNTIL_FITS:-"y"}
