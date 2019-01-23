@@ -22,7 +22,8 @@ Contents
 Usage:
 
 ```bash
-make_dvd <iso_path> [media_files.mpg ...]
+# Relies on having `make_dvd_xml.rb` on the path
+env PATH="$PATH:." make_dvd <iso_path> [media_files.mpg ...]
 ```
 
 `make_dvd_xml.rb`
